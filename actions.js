@@ -53,8 +53,7 @@ export function updateActions() {
 				id: 'server',
 				default: '',
 				useVariables: true,
-				description:
-					'Depends on platform. Refer to Blackmagic Web Presenter desktop application for possible options.',
+				description: 'Depends on platform. Refer to Blackmagic Streaming Encoder desktop application for possible options.',
 			},
 			{
 				type: 'textinput',
@@ -82,7 +81,7 @@ export function updateActions() {
 
 			var server = action.options.server
 			var key = action.options.key
-			
+
 			if (server == '' && action.options.platform == 'Facebook') {
 				server = 'Default'
 			}
@@ -114,7 +113,8 @@ export function updateActions() {
 			{
 				type: 'textinput',
 				label: 'Stream Key',
-				description: 'Enter the Stream Key from your YouTube creator studio account. All other settings are set to YouTube defaults except for the Stream Key.',
+				description:
+					'Enter the Stream Key from your YouTube creator studio account. All other settings are set to YouTube defaults except for the Stream Key.',
 				id: 'key',
 				default: '',
 				useVariables: true,
@@ -128,7 +128,7 @@ export function updateActions() {
 				// changed in WebPresenter 3.3
 				platform = 'YouTube RTMP'
 			}
-			
+
 			const key = action.options.key
 
 			var cmd =
@@ -292,7 +292,7 @@ export function updateActions() {
 			this.sendCommand(cmd)
 		},
 	}
-	
+
 	actions['passphrase'] = {
 		name: 'Change SRT Passphrase',
 		options: [
@@ -306,9 +306,9 @@ export function updateActions() {
 		],
 		callback: async (action, context) => {
 			const pass = action.options.passphrase
-	
+
 			var cmd = 'STREAM SETTINGS:\nPassword: ' + pass + '\n\n'
-	
+
 			this.sendCommand(cmd)
 		},
 	}
