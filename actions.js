@@ -45,6 +45,7 @@ export function updateActions() {
 				type: 'dropdown',
 				label: 'Platform',
 				id: 'platform',
+				default: this.platforms[0]?.id,
 				choices: this.platforms,
 			},
 			{
@@ -53,7 +54,8 @@ export function updateActions() {
 				id: 'server',
 				default: '',
 				useVariables: true,
-				description: 'Depends on platform. Refer to Blackmagic Streaming Encoder desktop application for possible options.',
+				description:
+					'Depends on platform. Refer to Blackmagic Streaming Encoder desktop application for possible options.',
 			},
 			{
 				type: 'textinput',
@@ -77,6 +79,11 @@ export function updateActions() {
 			}
 			if (action.options.key == '') {
 				this.log('warn', 'Stream Key parameter is missing from Stream Settings')
+			}
+
+			if (!action.options.platform) {
+				this.log('error', 'Stream Settings not sent: no Platform selected (is the device connected?)')
+				return
 			}
 
 			var server = action.options.server
@@ -159,6 +166,7 @@ export function updateActions() {
 				type: 'dropdown',
 				label: 'Platform',
 				id: 'platform',
+				default: this.customPlatforms[0]?.id,
 				choices: this.customPlatforms,
 			},
 			{
@@ -193,6 +201,11 @@ export function updateActions() {
 			},
 		],
 		callback: async (action, context) => {
+			if (!action.options.platform) {
+				this.log('error', 'Custom URL Settings not sent: no Platform selected (is the device connected?)')
+				return
+			}
+
 			const url = action.options.customURL
 			const key = action.options.key
 
@@ -200,7 +213,7 @@ export function updateActions() {
 				'STREAM SETTINGS:\nVideo Mode: ' +
 				action.options.video_mode +
 				'\n' +
-				'Current Platform:' +
+				'Current Platform: ' +
 				action.options.platform +
 				'\n' +
 				'Current Server: Custom' +
@@ -208,7 +221,7 @@ export function updateActions() {
 				'Current Quality Level: ' +
 				action.options.quality +
 				'\n' +
-				'Current URL:' +
+				'Current URL: ' +
 				url +
 				'\n' +
 				'Stream Key: ' +

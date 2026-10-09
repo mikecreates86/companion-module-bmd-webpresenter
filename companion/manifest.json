@@ -3,7 +3,7 @@
 	"name": "bmd-webpresenter",
 	"shortname": "WebPresenter",
 	"description": "Live stream from any SDI video source direct to YouTube, Facebook, Twitter and more",
-	"version": "2.1.5",
+	"version": "2.1.6",
 	"license": "MIT",
 	"repository": "git+https://github.com/bitfocus/companion-module-bmd-webpresenter.git",
 	"bugs": "https://github.com/bitfocus/companion-module-bmd-webpresenter/issues",

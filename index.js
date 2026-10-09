@@ -17,7 +17,6 @@ class WebPresenter extends InstanceBase {
 	}
 
 	getConfigFields() {
-		console.log('config fields')
 		return [
 			{
 				type: 'static-text',
@@ -42,21 +41,14 @@ class WebPresenter extends InstanceBase {
 	}
 
 	async destroy() {
-		if (this.timer) {
-			clearInterval(this.timer)
-			delete this.timer
-		}
+		this.stopPolling()
 
 		if (this.socket !== undefined) {
 			this.socket.destroy()
 		}
-
-		console.log('destroy', this.id)
 	}
 
 	async init(config) {
-		console.log('init WebPresenter')
-
 		this.config = config
 		this.request_id = 0
 		this.stash = []
@@ -68,8 +60,6 @@ class WebPresenter extends InstanceBase {
 		this.timer = undefined
 		this.poll = false
 
-		console.log(this.config)
-
 		this.updateActions()
 		this.updateVariables()
 		this.updateFeedbacks()
@@ -79,32 +69,44 @@ class WebPresenter extends InstanceBase {
 	}
 
 	initTCP() {
-		console.log('initTCP ' + this.config.host + ':' + this.config.port)
+		this.log('debug', 'initTCP ' + this.config.host + ':' + this.config.port)
 
-		this.receiveBuffer = ''
+		this.resetParser()
+		this.stopPolling()
 
 		if (this.socket !== undefined) {
 			this.socket.destroy()
 			delete this.socket
 		}
 
-		if (this.config.host) {
-			this.socket = new TCPHelper(this.config.host, this.config.port)
+		if (!this.config.host) {
+			this.updateStatus(InstanceStatus.BadConfig, 'Device IP is not set')
+			return
+		}
+
+		{
+			this.socket = new TCPHelper(this.config.host, this.config.port || 9977)
 
 			this.socket.on('status_change', (status, message) => {
 				this.updateStatus(status, message)
+				if (status !== InstanceStatus.Ok) {
+					// connection lost: stop polling and throw away any half-received reply
+					this.stopPolling()
+					this.resetParser()
+				}
 			})
 
 			this.socket.on('error', (err) => {
-				console.log('Network error', err)
 				this.log('error', 'Network error: ' + err.message)
 				this.updateStatus(InstanceStatus.ConnectionFailure, err.message)
-				this.poll = false
+				this.stopPolling()
 			})
 
 			this.socket.on('connect', () => {
-				console.log('Connected')
-				// poll every second
+				this.log('debug', 'Connected')
+				this.resetParser()
+				// always make sure only ONE poll timer exists, even after many reconnects
+				this.stopPolling()
 				this.poll = true
 				this.timer = setInterval(this.dataPoller.bind(this), 1000)
 			})
@@ -114,14 +116,15 @@ class WebPresenter extends InstanceBase {
 				var i = 0,
 					line = '',
 					offset = 0
-				this.receiveBuffer += chunk
+				this.receiveBuffer += chunk.toString()
 
 				while ((i = this.receiveBuffer.indexOf('\n', offset)) !== -1) {
 					line = this.receiveBuffer.substr(offset, i - offset)
 					offset = i + 1
-					if (line.toString() != 'ACK') {
+					if (line.trim() == 'NAK') {
+						this.log('warn', 'The device rejected the last command (NAK). Check the settings you sent.')
+					} else if (line.trim() != 'ACK') {
 						this.socket.emit('receiveline', line.toString())
-						// console.log(line.toString())
 					}
 				}
 
@@ -141,21 +144,37 @@ class WebPresenter extends InstanceBase {
 						obj[info.shift()] = info.join(':')
 					})
 
-					this.processDeviceInformation(cmd, obj)
+					try {
+						this.processDeviceInformation(cmd, obj)
+					} catch (e) {
+						this.log('warn', 'Could not process device reply "' + cmd + '": ' + e.message)
+					}
 
 					this.stash = []
 					this.command = null
 				} else if (line.length > 0) {
-					console.log('weird response from device: ' + line.toString() + ' ' + line.length)
+					this.log('debug', 'unexpected response from device: ' + line.toString())
 				}
 			})
 		}
 	}
 
+	stopPolling() {
+		this.poll = false
+		if (this.timer) {
+			clearInterval(this.timer)
+			this.timer = undefined
+		}
+	}
+
+	resetParser() {
+		this.receiveBuffer = ''
+		this.stash = []
+		this.command = null
+	}
+
 	processDeviceInformation(key, data) {
-		console.log('device information process key : ' + key)
-		console.log('device information process data:')
-		console.info(data)
+		this.log('debug', 'device information received: ' + key)
 
 		if (key == 'IDENTITY') {
 			if (data['Label'] !== undefined) {
@@ -181,8 +200,6 @@ class WebPresenter extends InstanceBase {
 					this.formats.push({ id: m[i].trim(), label: m[i].trim() })
 				}
 
-				console.log('formats available from device:')
-				console.log(this.formats)
 				this.updateActions()
 			}
 
@@ -193,14 +210,13 @@ class WebPresenter extends InstanceBase {
 					this.quality.push({ id: q[i].trim(), label: q[i].trim() })
 				}
 
-				console.log('quality levels available from device:')
-				console.log(this.quality)
 				this.updateActions()
 			}
 
 			if (data['Available Default Platforms'] !== undefined) {
 				var p = data['Available Default Platforms'].split(',')
 				this.platforms = []
+				this.customPlatforms = []
 
 				for (var i = 0; i < p.length; i++) {
 					if (p[i].trim() == 'Custom URL H.264' || p[i].trim() == 'Custom URL H.265') {
@@ -210,8 +226,6 @@ class WebPresenter extends InstanceBase {
 					}
 				}
 
-				console.log('platforms available from device:')
-				console.log(this.platforms)
 				this.updateActions()
 			}
 
@@ -226,8 +240,6 @@ class WebPresenter extends InstanceBase {
 					this.platforms.push({ id: p[i].trim(), label: p[i].trim() })
 				}
 
-				console.log('platforms available from device:')
-				console.log(this.platforms)
 				this.updateActions()
 			}
 
@@ -263,9 +275,9 @@ class WebPresenter extends InstanceBase {
 		if (key == 'STREAM STATE') {
 			if (data['Status'] !== undefined) {
 				this.streaming = data['Status']
-				this.duration = data['Duration']
-				this.bitrate = data['Bitrate']
-				this.cache = data['Cache Used']
+				this.duration = data['Duration'] || '00:00:00:00'
+				this.bitrate = data['Bitrate'] || '' || ''
+				this.cache = data['Cache Used'] || '' || ''
 
 				this.setVariableValues({
 					stream_state: this.streaming,
@@ -283,11 +295,9 @@ class WebPresenter extends InstanceBase {
 	}
 
 	async configUpdated(config) {
-		console.log('configUpdated')
-
 		let resetConnection = false
 
-		if (this.config.host != config.host) {
+		if (this.config.host != config.host || this.config.port != config.port) {
 			resetConnection = true
 		}
 
@@ -304,21 +314,19 @@ class WebPresenter extends InstanceBase {
 	}
 
 	sendCommand(cmd) {
-		this.log('debug', 'sending: ' + cmd)
+		this.log('debug', 'sending: ' + String(cmd).split('\n')[0])
 		if (cmd !== undefined) {
-			if (this.socket !== undefined) {
+			if (this.socket !== undefined && this.socket.isConnected) {
 				this.socket.send(cmd)
 			} else {
-				this.log('warn', 'Socket not connected')
+				this.log('warn', 'Command not sent: not connected to the device')
 			}
 		}
 	}
 
 	dataPoller() {
-		if (this.socket !== undefined && this.poll) {
+		if (this.socket !== undefined && this.socket.isConnected && this.poll) {
 			this.socket.send('STREAM STATE:\n\n')
-		} else {
-			this.log('debug', 'dataPoller - Socket not connected')
 		}
 	}
 }
