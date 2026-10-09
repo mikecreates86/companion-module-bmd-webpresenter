@@ -90,3 +90,15 @@ Report when the device rejects a command
 
 ## Version 2.1.7
 Updated README and help text
+
+
+## Version 2.1.8
+Self-healing connection: if the device stops replying for 8 seconds the module reconnects by itself
+
+Add a 'Reconnect to Device' action (usable from a button when you can't reach the device)
+
+Diagnostic logging: the debug log now shows what the device sends back after a command (stream keys and passwords are hidden)
+
+Failed sends can no longer cause an unhandled error
+
+Removed repeating debug messages from the feedback

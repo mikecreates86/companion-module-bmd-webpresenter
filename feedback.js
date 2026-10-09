@@ -26,7 +26,6 @@ export function updateFeedbacks() {
 			},
 		],
 		callback: ({ options }) => {
-			console.log('update feedback status: ' + this.streaming)
 			if (this.streaming === options.stream_state) {
 				return true
 			} else {

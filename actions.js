@@ -326,5 +326,13 @@ export function updateActions() {
 		},
 	}
 
+	actions['reconnect'] = {
+		name: 'Reconnect to Device',
+		options: [],
+		callback: () => {
+			this.reconnect('requested by button')
+		},
+	}
+
 	this.setActionDefinitions(actions)
 }

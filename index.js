@@ -59,6 +59,9 @@ class WebPresenter extends InstanceBase {
 		this.customPlatforms = []
 		this.timer = undefined
 		this.poll = false
+		this.lastData = 0
+		this.lastReconnect = 0
+		this.traceUntil = 0
 
 		this.updateActions()
 		this.updateVariables()
@@ -103,7 +106,8 @@ class WebPresenter extends InstanceBase {
 			})
 
 			this.socket.on('connect', () => {
-				this.log('debug', 'Connected')
+				this.log('info', 'Connected to device')
+				this.lastData = Date.now()
 				this.resetParser()
 				// always make sure only ONE poll timer exists, even after many reconnects
 				this.stopPolling()
@@ -116,7 +120,14 @@ class WebPresenter extends InstanceBase {
 				var i = 0,
 					line = '',
 					offset = 0
-				this.receiveBuffer += chunk.toString()
+				this.lastData = Date.now()
+				const text = chunk.toString()
+				// Diagnostics: show everything the device says except routine status replies,
+				// and show everything for 30 seconds after a command is sent. Secrets are hidden.
+				if (Date.now() < this.traceUntil || !text.startsWith('STREAM STATE:')) {
+					this.log('debug', 'received: ' + this.redact(text))
+				}
+				this.receiveBuffer += text
 
 				while ((i = this.receiveBuffer.indexOf('\n', offset)) !== -1) {
 					line = this.receiveBuffer.substr(offset, i - offset)
@@ -157,6 +168,31 @@ class WebPresenter extends InstanceBase {
 				}
 			})
 		}
+	}
+
+	redact(text) {
+		return String(text)
+			.replace(/(Stream Key|Password)\s*:[^\n]*/gi, '$1: ****')
+			.trim()
+			.replace(/\r?\n/g, ' | ')
+			.substring(0, 600)
+	}
+
+	safeSend(cmd) {
+		// socket.send() is asynchronous; make sure a failed write can never crash the module
+		try {
+			Promise.resolve(this.socket.send(cmd)).catch((e) => {
+				this.log('warn', 'Failed to send to device: ' + e.message)
+			})
+		} catch (e) {
+			this.log('warn', 'Failed to send to device: ' + e.message)
+		}
+	}
+
+	reconnect(reason) {
+		this.lastReconnect = Date.now()
+		this.log('warn', 'Reconnecting to device: ' + reason)
+		this.initTCP()
 	}
 
 	stopPolling() {
@@ -314,10 +350,11 @@ class WebPresenter extends InstanceBase {
 	}
 
 	sendCommand(cmd) {
-		this.log('debug', 'sending: ' + String(cmd).split('\n')[0])
 		if (cmd !== undefined) {
+			this.log('debug', 'sending: ' + this.redact(cmd))
+			this.traceUntil = Date.now() + 30000
 			if (this.socket !== undefined && this.socket.isConnected) {
-				this.socket.send(cmd)
+				this.safeSend(cmd)
 			} else {
 				this.log('warn', 'Command not sent: not connected to the device')
 			}
@@ -326,7 +363,15 @@ class WebPresenter extends InstanceBase {
 
 	dataPoller() {
 		if (this.socket !== undefined && this.socket.isConnected && this.poll) {
-			this.socket.send('STREAM STATE:\n\n')
+			// Watchdog: the device normally answers every second. If it goes quiet, the connection
+			// is stuck, so drop it and start a fresh one (at most once every 15 seconds).
+			const quietFor = Date.now() - this.lastData
+			if (quietFor > 8000 && Date.now() - this.lastReconnect > 15000) {
+				this.updateStatus(InstanceStatus.ConnectionFailure, 'No reply from device')
+				this.reconnect('no reply from the device for ' + Math.round(quietFor / 1000) + ' seconds')
+				return
+			}
+			this.safeSend('STREAM STATE:\n\n')
 		}
 	}
 }
