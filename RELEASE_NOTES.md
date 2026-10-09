@@ -1,6 +1,5 @@
-Aimed at the Web Presenter going quiet after going live:
+Clearer behaviour when the Web Presenter stops answering:
 
-- The module now notices if the device stops replying for 8 seconds and reconnects by itself.
-- New "Reconnect to Device" action, so you can force a reconnect from a button when working remotely.
-- The debug log now shows what the device says after each command (stream keys and passwords are hidden), to help find the cause of any remaining problems.
-- A failed send can no longer cause an unhandled error. Removed repeating debug messages from the feedback.
+- If the device accepts the connection but never replies, the module now logs "the device is not responding, it may need a power cycle" and shows a red status instead of a misleading green one.
+- Reconnect attempts back off (15 seconds, then 30, then once a minute) instead of retrying every 15 seconds.
+- The module logs when the device starts responding again.

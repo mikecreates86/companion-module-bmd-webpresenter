@@ -35,7 +35,7 @@ Model, label, software version, video mode, platform, server, stream key, qualit
 
 ## Troubleshooting
 - **Status is red / not connecting:** check the IP address and that the device is on the same network.
-- **Status lines stop in the log:** the module notices after 8 seconds of silence and reconnects by itself. You can also press the **Reconnect to Device** action.
+- **Status lines stop in the log / "Device is not responding":** the module notices after 8 seconds of silence and reconnects by itself, backing off to once a minute. If it never recovers, the device itself has stopped answering and needs a power cycle. You can also press the **Reconnect to Device** action.
 - **A settings button did nothing:** open the Companion log. The module reports "not connected", "no Platform selected", or that the device rejected the command.
 
 More detail is in the [help file](companion/HELP.md). Report problems on the [issues page](../../issues). Licensed under [MIT](./LICENSE).

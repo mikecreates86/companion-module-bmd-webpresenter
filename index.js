@@ -6,6 +6,10 @@ import { updateFeedbacks } from './feedback.js'
 import { updatePresets } from './presets.js'
 import { updateVariables } from './variables.js'
 
+const RECONNECT_MIN = 15000
+const RECONNECT_MAX = 60000
+const SILENT_MESSAGE = 'Device is not responding - it may need a power cycle'
+
 class WebPresenter extends InstanceBase {
 	constructor(internal) {
 		super(internal)
@@ -61,6 +65,8 @@ class WebPresenter extends InstanceBase {
 		this.poll = false
 		this.lastData = 0
 		this.lastReconnect = 0
+		this.reconnectDelay = RECONNECT_MIN
+		this.silent = false
 		this.traceUntil = 0
 
 		this.updateActions()
@@ -91,7 +97,12 @@ class WebPresenter extends InstanceBase {
 			this.socket = new TCPHelper(this.config.host, this.config.port || 9977)
 
 			this.socket.on('status_change', (status, message) => {
-				this.updateStatus(status, message)
+				if (status === InstanceStatus.Ok && this.silent) {
+					// connected, but the device still isn't talking: don't show a misleading green status
+					this.updateStatus(InstanceStatus.ConnectionFailure, SILENT_MESSAGE)
+				} else {
+					this.updateStatus(status, message)
+				}
 				if (status !== InstanceStatus.Ok) {
 					// connection lost: stop polling and throw away any half-received reply
 					this.stopPolling()
@@ -121,6 +132,12 @@ class WebPresenter extends InstanceBase {
 					line = '',
 					offset = 0
 				this.lastData = Date.now()
+				this.reconnectDelay = RECONNECT_MIN
+				if (this.silent) {
+					this.silent = false
+					this.log('info', 'The device is responding again')
+					this.updateStatus(InstanceStatus.Ok)
+				}
 				const text = chunk.toString()
 				// Diagnostics: show everything the device says except routine status replies,
 				// and show everything for 30 seconds after a command is sent. Secrets are hidden.
@@ -366,8 +383,14 @@ class WebPresenter extends InstanceBase {
 			// Watchdog: the device normally answers every second. If it goes quiet, the connection
 			// is stuck, so drop it and start a fresh one (at most once every 15 seconds).
 			const quietFor = Date.now() - this.lastData
-			if (quietFor > 8000 && Date.now() - this.lastReconnect > 15000) {
-				this.updateStatus(InstanceStatus.ConnectionFailure, 'No reply from device')
+			if (quietFor > 8000 && Date.now() - this.lastReconnect > this.reconnectDelay) {
+				if (!this.silent) {
+					this.silent = true
+					this.log('warn', 'Connected, but the device is not responding. It may need a power cycle.')
+				}
+				this.updateStatus(InstanceStatus.ConnectionFailure, SILENT_MESSAGE)
+				// back off (15s, 30s, 60s, then every 60s) so a stuck device isn't hammered with new connections
+				this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX)
 				this.reconnect('no reply from the device for ' + Math.round(quietFor / 1000) + ' seconds')
 				return
 			}

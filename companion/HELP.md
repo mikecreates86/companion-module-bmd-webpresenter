@@ -102,3 +102,6 @@ Diagnostic logging: the debug log now shows what the device sends back after a c
 Failed sends can no longer cause an unhandled error
 
 Removed repeating debug messages from the feedback
+
+## Version 2.1.9
+When the device accepts the connection but never answers, the module now says so clearly ('may need a power cycle'), shows a red status instead of a misleading green one, and retries less often (15s, 30s, then every 60s)
