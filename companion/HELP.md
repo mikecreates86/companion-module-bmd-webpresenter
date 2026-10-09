@@ -80,3 +80,13 @@ Add streaming encoders
 
 ## Version 2.1.5
 Modernise action definitions
+
+## Version 2.1.6
+Fix the module overloading the device with status requests after the connection dropped and came back
+
+Stream Settings and Custom URL actions now choose a platform by default and refuse to send without one
+
+Report when the device rejects a command
+
+## Version 2.1.7
+Updated README and help text
