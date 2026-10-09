@@ -22,6 +22,7 @@ This module does not support the discontinued USB-only Web Presenter.
 | YouTube Simple Settings | Set up YouTube with only a Stream Key |
 | Custom URL H.264/H.265 Settings | Set a custom streaming URL and key |
 | Change Video Mode / Video Quality / Stream Key / SRT Passphrase | Change one setting at a time |
+| Reconnect to Device | Drops and re-opens the connection to the device (handy when working remotely) |
 | Device Control | Reboot or factory reset the device |
 
 The Server and Stream Key fields accept Companion variables. Use the Blackmagic Streaming Encoder desktop app to find the valid Server names for your platform, and your streaming service for the Stream Key.
@@ -34,6 +35,7 @@ Model, label, software version, video mode, platform, server, stream key, qualit
 
 ## Troubleshooting
 - **Status is red / not connecting:** check the IP address and that the device is on the same network.
+- **Status lines stop in the log:** the module notices after 8 seconds of silence and reconnects by itself. You can also press the **Reconnect to Device** action.
 - **A settings button did nothing:** open the Companion log. The module reports "not connected", "no Platform selected", or that the device rejected the command.
 
 More detail is in the [help file](companion/HELP.md). Report problems on the [issues page](../../issues). Licensed under [MIT](./LICENSE).
