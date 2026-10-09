@@ -6,6 +6,7 @@ import { updateFeedbacks } from './feedback.js'
 import { updatePresets } from './presets.js'
 import { updateVariables } from './variables.js'
 
+const IDLE_POLL = 5000
 const RECONNECT_MIN = 15000
 const RECONNECT_MAX = 60000
 const SILENT_MESSAGE = 'Device is not responding - it may need a power cycle'
@@ -67,6 +68,7 @@ class WebPresenter extends InstanceBase {
 		this.lastReconnect = 0
 		this.reconnectDelay = RECONNECT_MIN
 		this.silent = false
+		this.lastPoll = 0
 		this.traceUntil = 0
 
 		this.updateActions()
@@ -149,8 +151,8 @@ class WebPresenter extends InstanceBase {
 				while ((i = this.receiveBuffer.indexOf('\n', offset)) !== -1) {
 					line = this.receiveBuffer.substr(offset, i - offset)
 					offset = i + 1
-					if (line.trim() == 'NAK') {
-						this.log('warn', 'The device rejected the last command (NAK). Check the settings you sent.')
+					if (line.trim() == 'NACK' || line.trim() == 'NAK') {
+						this.log('warn', 'The device rejected the last command (NACK). Check the settings you sent.')
 					} else if (line.trim() != 'ACK') {
 						this.socket.emit('receiveline', line.toString())
 					}
@@ -326,22 +328,38 @@ class WebPresenter extends InstanceBase {
 		}
 
 		if (key == 'STREAM STATE') {
+			// The device sends partial updates (for example only "Status: Connecting"), so only
+			// change the values that are actually present in this block.
+			const values = {}
+
 			if (data['Status'] !== undefined) {
 				this.streaming = data['Status']
-				this.duration = data['Duration'] || '00:00:00:00'
-				this.bitrate = data['Bitrate'] || '' || ''
-				this.cache = data['Cache Used'] || '' || ''
+				values.stream_state = this.streaming
+			}
 
-				this.setVariableValues({
-					stream_state: this.streaming,
-					stream_duration: this.duration,
-					stream_duration_HH: this.duration.substring(3, 5),
-					stream_duration_MM: this.duration.substring(6, 8),
-					stream_duration_SS: this.duration.substring(9, 11),
-					stream_bitrate: this.bitrate,
-					cache: this.cache,
-				})
+			if (data['Duration'] !== undefined) {
+				this.duration = data['Duration']
+				values.stream_duration = this.duration
+				values.stream_duration_HH = this.duration.substring(3, 5)
+				values.stream_duration_MM = this.duration.substring(6, 8)
+				values.stream_duration_SS = this.duration.substring(9, 11)
+			}
 
+			if (data['Bitrate'] !== undefined) {
+				this.bitrate = data['Bitrate']
+				values.stream_bitrate = this.bitrate
+			}
+
+			if (data['Cache Used'] !== undefined) {
+				this.cache = data['Cache Used']
+				values.cache = this.cache
+			}
+
+			if (Object.keys(values).length > 0) {
+				this.setVariableValues(values)
+			}
+
+			if (data['Status'] !== undefined) {
 				this.checkFeedbacks('streaming_state')
 			}
 		}
@@ -394,7 +412,14 @@ class WebPresenter extends InstanceBase {
 				this.reconnect('no reply from the device for ' + Math.round(quietFor / 1000) + ' seconds')
 				return
 			}
-			this.safeSend('STREAM STATE:\n\n')
+			// The device pushes Status changes by itself; only Duration, Bitrate and Cache Used need
+			// polling. So poll every second while a stream is active, but only every 5 seconds when idle
+			// (this also acts as the heartbeat for the watchdog above).
+			const active = this.streaming && this.streaming !== 'Idle'
+			if (active || Date.now() - this.lastPoll >= IDLE_POLL) {
+				this.lastPoll = Date.now()
+				this.safeSend('STREAM STATE:\n\n')
+			}
 		}
 	}
 }

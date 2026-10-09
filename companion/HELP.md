@@ -105,3 +105,10 @@ Removed repeating debug messages from the feedback
 
 ## Version 2.1.9
 When the device accepts the connection but never answers, the module now says so clearly ('may need a power cycle'), shows a red status instead of a misleading green one, and retries less often (15s, 30s, then every 60s)
+
+## Version 2.1.10
+Checked against the Blackmagic Streaming Ethernet Protocol v1.2: the device rejecting a command is now detected correctly (it replies NACK)
+
+Partial status updates from the device (for example only "Connecting") no longer blank the duration, bitrate and cache variables
+
+Status is polled every second only while a stream is active, and every 5 seconds when idle, since the device pushes status changes itself

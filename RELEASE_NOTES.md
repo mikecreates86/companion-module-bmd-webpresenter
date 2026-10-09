@@ -1,5 +1,5 @@
-Clearer behaviour when the Web Presenter stops answering:
+Checked against Blackmagic's official Streaming Ethernet Protocol document (v1.2):
 
-- If the device accepts the connection but never replies, the module now logs "the device is not responding, it may need a power cycle" and shows a red status instead of a misleading green one.
-- Reconnect attempts back off (15 seconds, then 30, then once a minute) instead of retrying every 15 seconds.
-- The module logs when the device starts responding again.
+- Fixed: the module never noticed when the device rejected a command, because the device says "NACK" and the module was listening for "NAK". It now logs a clear warning.
+- Fixed: partial status updates from the device (for example just "Connecting") no longer blank the duration, bitrate and cache variables.
+- Less traffic: the module now checks the device every second only while a stream is active, and every 5 seconds when idle. The device announces status changes itself, so idle polling was unnecessary.
