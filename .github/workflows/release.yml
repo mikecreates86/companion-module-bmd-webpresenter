@@ -1,0 +1,59 @@
+name: Release module package
+
+# Builds the Companion module package (.tgz) and publishes it under Releases
+# whenever a new version number lands on main.
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the version number is new and consistent
+        id: ver
+        run: |
+          V=$(node -p "require('./package.json').version")
+          M=$(node -p "require('./companion/manifest.json').version")
+          if [ "$V" != "$M" ]; then
+            echo "::error::Version mismatch: package.json says $V but companion/manifest.json says $M"; exit 1
+          fi
+          if git rev-parse "v$V" >/dev/null 2>&1; then
+            echo "Version $V is already released - nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          LATEST=$(git tag -l 'v*' | sed 's/^v//' | sort -V | tail -n1)
+          if [ -n "$LATEST" ] && [ "$(printf '%s\n%s\n' "$LATEST" "$V" | sort -V | tail -n1)" != "$V" ]; then
+            echo "::error::Version $V is not higher than the latest release $LATEST"; exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Build the module package
+        if: steps.ver.outputs.skip != 'true'
+        run: |
+          yarn install --frozen-lockfile
+          yarn package
+          ls -l *.tgz
+
+      - name: Publish the release
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.ver.outputs.version }}
+          gh release create "v$V" "bmd-webpresenter-$V.tgz" \
+            --title "v$V" --notes-file RELEASE_NOTES.md --latest --target "$GITHUB_SHA"
